@@ -3,7 +3,9 @@ import supabase from '../supabase/client';
 import { successResponse, errorResponse } from '../utils/response';
 
 export const getStudents = async (req: Request, res: Response): Promise<void> => {
-  const { data, error } = await supabase
+  const search = req.query.search as string | undefined;
+
+  let query = supabase
     .from('students')
     .select(`
       id,
@@ -25,6 +27,12 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
       )
     `)
     .order('created_at', { ascending: false });
+
+  if (search) {
+    query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%`);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return errorResponse(res, 'Failed to retrieve students', error.message, 500);
@@ -66,3 +74,4 @@ export const getStudentById = async (req: Request<{ id: string }>, res: Response
 
   return successResponse(res, 'Student retrieved successfully', data);
 };
+
