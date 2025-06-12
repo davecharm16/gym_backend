@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction, Router } from 'express';
 import dotenv from 'dotenv';
 import { errorHandler } from './middlewares/error.middleware';
 import authRoutes from './routes/auth.routes';
+import checkInRoutes from './routes/checkin.routes';
 import cors from 'cors';
 
 dotenv.config();
@@ -15,6 +16,8 @@ app.get('/', (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/checkIn', checkInRoutes);
+
 
 app.use(errorHandler);
 

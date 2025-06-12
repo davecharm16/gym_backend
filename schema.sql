@@ -1,72 +1,99 @@
--- DROP CHILD TABLES FIRST TO AVOID FK CONFLICTS
-drop table if exists payments cascade;
-drop table if exists enrollments cascade;
-drop table if exists trainings cascade;
-drop table if exists categories cascade;
-drop table if exists admins cascade;
-drop table if exists instructors cascade;
-drop table if exists students cascade;
+-- Drop in reverse order of dependencies
+DROP TABLE IF EXISTS student_checkins CASCADE;
+DROP TABLE IF EXISTS payments CASCADE;
+DROP TABLE IF EXISTS enrollments CASCADE;
+DROP TABLE IF EXISTS trainings CASCADE;
+DROP TABLE IF EXISTS instructors CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS admins CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
--- 1. STUDENTS TABLE
-create table students (
-  id uuid primary key references users(id) on delete cascade,
-  full_name text not null,
-  membership_type text check (membership_type in ('monthly', 'per_session')) not null,
-  subscription_active boolean default false,
-  created_at timestamp with time zone default now()
+-- USERS
+CREATE TABLE public.users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email text NOT NULL UNIQUE,
+  role text NOT NULL CHECK (role = ANY (ARRAY['admin', 'student', 'instructor'])),
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now()
 );
 
--- 2. INSTRUCTORS TABLE
-create table instructors (
-  id uuid primary key references users(id) on delete cascade,
-  full_name text not null,
-  bio text,
-  created_at timestamp with time zone default now()
-);
-
--- 3. ADMINS TABLE
-create table admins (
-  id uuid primary key references users(id) on delete cascade,
+-- ADMINS (references users.id)
+CREATE TABLE public.admins (
+  id uuid PRIMARY KEY, -- Must match users.id
   full_name text,
-  super_admin boolean default false,
-  created_at timestamp with time zone default now()
+  super_admin boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT admins_user_id_fkey FOREIGN KEY (id) REFERENCES public.users(id)
 );
 
--- 4. CATEGORIES TABLE
-create table categories (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
+-- CATEGORIES
+CREATE TABLE public.categories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
   description text,
-  created_at timestamp with time zone default now()
+  created_at timestamp with time zone DEFAULT now()
 );
 
--- 5. TRAININGS TABLE
-create table trainings (
-  id uuid primary key default gen_random_uuid(),
-  title text not null,
+-- INSTRUCTORS (references users.id)
+CREATE TABLE public.instructors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+-- STUDENTS (references users.id)
+CREATE TABLE public.students (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  first_name text NOT NULL,
+  last_name text NOT NULL,
+  middle_name text,
+  sex text NOT NULL CHECK (sex = ANY (ARRAY['male', 'female', 'other'])),
+  address text NOT NULL,
+  birthdate date NOT NULL,
+  enrollment_date date NOT NULL,
+  subscription_type text NOT NULL CHECK (subscription_type = ANY (ARRAY['monthly', 'per_session'])),
+  picture_url text,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+-- TRAININGS (references instructors and categories)
+CREATE TABLE public.trainings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
   description text,
-  category_id uuid references categories(id) on delete set null,
-  instructor_id uuid references instructors(id) on delete set null,
-  base_fee numeric(10, 2) not null,
-  created_at timestamp with time zone default now()
+  category_id uuid REFERENCES public.categories(id),
+  instructor_id uuid REFERENCES public.instructors(id),
+  base_fee numeric NOT NULL,
+  created_at timestamp with time zone DEFAULT now()
 );
 
--- 6. ENROLLMENTS TABLE
-create table enrollments (
-  id uuid primary key default gen_random_uuid(),
-  student_id uuid not null references students(id) on delete cascade,
-  training_id uuid not null references trainings(id) on delete cascade,
-  enrolled_at timestamp with time zone default now(),
-  paid boolean default false,
-  unique(student_id, training_id)
+-- ENROLLMENTS (links students to trainings)
+CREATE TABLE public.enrollments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  training_id uuid NOT NULL REFERENCES public.trainings(id) ON DELETE CASCADE,
+  enrolled_at timestamp with time zone DEFAULT now(),
+  paid boolean DEFAULT false
 );
 
--- 7. PAYMENTS TABLE
-create table payments (
-  id uuid primary key default gen_random_uuid(),
-  student_id uuid not null references students(id) on delete cascade,
-  amount numeric(10, 2) not null,
-  payment_type text check (payment_type in ('subscription', 'training_fee')) not null,
-  training_id uuid references trainings(id) on delete set null,
-  paid_at timestamp with time zone default now()
+-- PAYMENTS (for subscription or training fee)
+CREATE TABLE public.payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  amount numeric NOT NULL,
+  payment_type text NOT NULL CHECK (payment_type = ANY (ARRAY['subscription', 'training_fee'])),
+  training_id uuid REFERENCES public.trainings(id),
+  paid_at timestamp with time zone DEFAULT now()
+);
+
+-- STUDENT CHECKINS (attendance tracking)
+CREATE TABLE public.student_checkins (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  checkin_time timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now()
 );
