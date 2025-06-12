@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import { errorHandler } from './middlewares/error.middleware';
 import authRoutes from './routes/auth.routes';
 import checkInRoutes from './routes/checkin.routes';
+import studentRoutes from './routes/student.routes';
+
 import cors from 'cors';
 
 dotenv.config();
@@ -17,6 +19,9 @@ app.get('/', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/checkIn', checkInRoutes);
+app.use('/api/students', studentRoutes);
+
+
 
 
 app.use(errorHandler);

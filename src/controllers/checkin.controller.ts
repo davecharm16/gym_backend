@@ -1,12 +1,13 @@
 import { Request, Response } from 'express';
 import { checkinSchema } from '../validations/checkin.schema';
 import supabase from '../supabase/client';
+import { successResponse, errorResponse } from '../utils/response';
 
 export const createCheckin = async (req: Request, res: Response) => {
   const { error: validationError, value } = checkinSchema.validate(req.body);
 
   if (validationError) {
-    res.status(400).json({ error: validationError.details[0].message });
+    errorResponse(res, 'Validation error', validationError.details[0].message, 400);
     return;
   }
 
@@ -20,12 +21,12 @@ export const createCheckin = async (req: Request, res: Response) => {
     .single();
 
   if (userError || !user) {
-    res.status(404).json({ error: 'User not found' });
+    errorResponse(res, 'User not found', userError?.message || null, 404);
     return;
   }
 
   if (user.role !== 'student') {
-    res.status(403).json({ error: 'Only students are allowed to check in' });
+    errorResponse(res, 'Only students are allowed to check in', null, 403);
     return;
   }
 
@@ -37,7 +38,7 @@ export const createCheckin = async (req: Request, res: Response) => {
     .single();
 
   if (studentError || !student) {
-    res.status(404).json({ error: 'Student profile not found' });
+    errorResponse(res, 'Student profile not found', studentError?.message || null, 404);
     return;
   }
 
@@ -54,10 +55,10 @@ export const createCheckin = async (req: Request, res: Response) => {
   ]);
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    errorResponse(res, 'Failed to record check-in', error.message, 500);
     return;
   }
 
-  res.status(201).json({ message: 'Check-in successful', data });
+  successResponse(res, 'Check-in successful', data, 201);
   return;
 };
