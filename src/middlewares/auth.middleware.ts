@@ -1,4 +1,4 @@
-/// <reference path="../types/express.d.ts" />
+/// <reference path="../types/express-extensions.d.ts" />
 import { Request, Response, NextFunction } from 'express';
 import supabase from '../supabase/client';
 

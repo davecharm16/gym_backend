@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction, Router } from 'express';
 import dotenv from 'dotenv';
 import { errorHandler } from './middlewares/error.middleware';
 import authRoutes from './routes/auth.routes';
