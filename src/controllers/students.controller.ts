@@ -6,26 +6,8 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
   const search = req.query.search as string | undefined;
 
   let query = supabase
-    .from('students')
-    .select(`
-      id,
-      email,
-      first_name,
-      last_name,
-      middle_name,
-      sex,
-      address,
-      birthdate,
-      enrollment_date,
-      picture_url,
-      subscription_type_id,
-      created_at,
-      subscription_types (
-        id,
-        name,
-        monthly_fee
-      )
-    `)
+    .from('student_with_subscription_details')
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (search) {
@@ -45,26 +27,8 @@ export const getStudentById = async (req: Request<{ id: string }>, res: Response
   const { id } = req.params;
 
   const { data, error } = await supabase
-    .from('students')
-    .select(`
-      id,
-      email,
-      first_name,
-      last_name,
-      middle_name,
-      sex,
-      address,
-      birthdate,
-      enrollment_date,
-      picture_url,
-      subscription_type_id,
-      created_at, 
-      subscription_types (
-        id,
-        name,
-        monthly_fee
-      )
-    `)
+    .from('student_with_subscription_details')
+    .select('*')
     .eq('id', id)
     .single();
 
@@ -74,4 +38,3 @@ export const getStudentById = async (req: Request<{ id: string }>, res: Response
 
   return successResponse(res, 'Student retrieved successfully', data);
 };
-

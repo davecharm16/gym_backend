@@ -107,6 +107,7 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
     picture_url,
   } = value;
 
+  // Step 1: Create Supabase Auth User
   const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
     email,
     password,
@@ -121,6 +122,7 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
 
   const user_id = authUser.user.id;
 
+  // Step 2: Insert into users table
   const { error: insertUserError } = await supabase.from('users').insert([
     {
       id: user_id,
@@ -135,6 +137,12 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
     return;
   }
 
+  // Step 3: Calculate paid_until (+30 days from today)
+  const now = new Date();
+  const paidUntil = new Date(now);
+  paidUntil.setDate(now.getDate() + 30);
+
+  // Step 4: Insert into students table
   const { error: insertStudentError } = await supabase.from('students').insert([
     {
       user_id,
@@ -148,6 +156,7 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
       enrollment_date,
       subscription_type_id: subscription_type_id || null,
       picture_url: picture_url || null,
+      paid_until: paidUntil.toISOString(),
     },
   ]);
 
@@ -156,10 +165,16 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
     return;
   }
 
-  successResponse(res, 'Student registered successfully', {
-    id: user_id,
-    email,
-    role,
-  }, 201);
+  successResponse(
+    res,
+    'Student registered successfully',
+    {
+      id: user_id,
+      email,
+      role,
+      paid_until: paidUntil.toISOString(),
+    },
+    201
+  );
   return;
 };
