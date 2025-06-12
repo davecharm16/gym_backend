@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import supabase from '../supabase/client';
+import { registerStudentSchema } from '../validations/registerStudent.schema';
 
 interface RegisterRequestBody {
   email: string;
   password: string;
-  role: 'Student' | 'Instructor' | 'Admin';
+  role: 'student' | 'instructor' | 'admin';
 }
 
 export const register = async (
@@ -84,3 +85,88 @@ export const login = async (
   });
 };
 
+export const registerStudent = async (req: Request, res: Response): Promise<void> => {
+  const { error: validationError, value } = registerStudentSchema.validate(req.body);
+
+  if (validationError) {
+    res.status(400).json({ error: validationError.details[0].message });
+    return;
+  }
+
+  const {
+    email,
+    password,
+    role,
+    first_name,
+    last_name,
+    middle_name,
+    sex,
+    address,
+    birthdate,
+    enrollment_date,
+    subscription_type_id,
+    picture_url,
+  } = value;
+
+  // Step 1: Create Supabase Auth User
+  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    user_metadata: { role, email_verified: true },
+    email_confirm: true,
+  });
+
+  if (authError || !authUser?.user?.id) {
+    res.status(400).json({ error: authError?.message || 'User creation failed.' });
+    return;
+  }
+
+  const user_id = authUser.user.id;
+
+  // Step 2: Insert into custom `users` table
+  const { error: insertUserError } = await supabase.from('users').insert([
+    {
+      id: user_id,
+      email,
+      role,
+      is_active: true,
+    },
+  ]);
+
+  if (insertUserError) {
+    res.status(500).json({ error: insertUserError.message });
+    return;
+  }
+
+  // Step 3: Insert into `students` table
+  const { error: insertStudentError } = await supabase.from('students').insert([
+    {
+      user_id,
+      email,
+      first_name,
+      last_name,
+      middle_name: middle_name || null,
+      sex,
+      address,
+      birthdate,
+      enrollment_date,
+      subscription_type_id: subscription_type_id || null,
+      picture_url: picture_url || null,
+    },
+  ]);
+
+  if (insertStudentError) {
+    res.status(500).json({ error: insertStudentError.message });
+    return;
+  }
+
+  res.status(201).json({
+    message: 'Student registered successfully',
+    user: {
+      id: user_id,
+      email,
+      role,
+    },
+  });
+  return;
+};
