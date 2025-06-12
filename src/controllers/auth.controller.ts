@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import supabase from '../supabase/client';
 import { registerStudentSchema } from '../validations/registerStudent.schema';
+import { successResponse, errorResponse } from '../utils/response';
 
 interface RegisterRequestBody {
   email: string;
@@ -20,15 +21,14 @@ export const register = async (
     password,
     user_metadata: { role, email_verified: true },
     email_confirm: true,
-
   });
 
   if (error) {
-    res.status(400).json({ error: error.message });
+    errorResponse(res, 'User registration failed', error.message, 400);
     return;
   }
 
-  res.status(201).json({ user: data.user });
+  successResponse(res, 'User registered successfully', { user: data.user }, 201);
   return;
 };
 
@@ -41,11 +41,11 @@ export const getUserById = async (
   const { data, error } = await supabase.auth.admin.getUserById(id);
 
   if (error) {
-    res.status(400).json({ error: error.message });
+    errorResponse(res, 'Failed to retrieve user', error.message, 400);
     return;
   }
 
-  res.status(200).json({ user: data.user });
+  successResponse(res, 'User retrieved successfully', { user: data.user });
   return;
 };
 
@@ -58,8 +58,6 @@ export const login = async (
   req: Request<{}, {}, LoginRequestBody>,
   res: Response
 ): Promise<void> => {
-
-
   const { email, password } = req.body;
 
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -68,13 +66,13 @@ export const login = async (
   });
 
   if (error || !data.session) {
-    res.status(401).json({ error: error?.message });
+    errorResponse(res, 'Invalid login credentials', error?.message, 401);
     return;
   }
 
   const { access_token, refresh_token, user } = data.session;
 
-  res.status(200).json({
+  successResponse(res, 'Login successful', {
     token: access_token,
     refresh_token,
     user: {
@@ -83,13 +81,14 @@ export const login = async (
       role: user.user_metadata?.role,
     },
   });
+  return;
 };
 
 export const registerStudent = async (req: Request, res: Response): Promise<void> => {
   const { error: validationError, value } = registerStudentSchema.validate(req.body);
 
   if (validationError) {
-    res.status(400).json({ error: validationError.details[0].message });
+    errorResponse(res, 'Validation error', validationError.details[0].message, 400);
     return;
   }
 
@@ -108,7 +107,6 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
     picture_url,
   } = value;
 
-  // Step 1: Create Supabase Auth User
   const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
     email,
     password,
@@ -117,13 +115,12 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
   });
 
   if (authError || !authUser?.user?.id) {
-    res.status(400).json({ error: authError?.message || 'User creation failed.' });
+    errorResponse(res, 'User creation failed', authError?.message, 400);
     return;
   }
 
   const user_id = authUser.user.id;
 
-  // Step 2: Insert into custom `users` table
   const { error: insertUserError } = await supabase.from('users').insert([
     {
       id: user_id,
@@ -134,11 +131,10 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
   ]);
 
   if (insertUserError) {
-    res.status(500).json({ error: insertUserError.message });
+    errorResponse(res, 'Failed to insert into users table', insertUserError.message, 500);
     return;
   }
 
-  // Step 3: Insert into `students` table
   const { error: insertStudentError } = await supabase.from('students').insert([
     {
       user_id,
@@ -156,17 +152,14 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
   ]);
 
   if (insertStudentError) {
-    res.status(500).json({ error: insertStudentError.message });
+    errorResponse(res, 'Failed to insert into students table', insertStudentError.message, 500);
     return;
   }
 
-  res.status(201).json({
-    message: 'Student registered successfully',
-    user: {
-      id: user_id,
-      email,
-      role,
-    },
-  });
+  successResponse(res, 'Student registered successfully', {
+    id: user_id,
+    email,
+    role,
+  }, 201);
   return;
 };
