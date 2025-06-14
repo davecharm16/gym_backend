@@ -2,20 +2,31 @@ import { Request, Response } from 'express';
 import supabase from '../supabase/client';
 import { registerStudentSchema } from '../validations/registerStudent.schema';
 import { successResponse, errorResponse } from '../utils/response';
+import { registerSchema } from '../validations/register.schema';
+
 
 interface RegisterRequestBody {
   email: string;
   password: string;
   role: 'student' | 'instructor' | 'admin';
+  full_name?: string; // used for admin
+  name?: string; // used for instructor
 }
-
 export const register = async (
-  req: Request<{}, {}, RegisterRequestBody>,
+  req: Request,
   res: Response
 ): Promise<void> => {
-  const { email, password, role } = req.body;
+  const { error: validationError, value } = registerSchema.validate(req.body);
+
+  if (validationError) {
+    return errorResponse(res, 'Validation failed', validationError.details[0].message, 400);
+  }
+
+  const { email, password, role, full_name, name } = value;
+
   console.log('Registering user:', email, role);
 
+  // 1. Create Supabase Auth user
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
@@ -23,13 +34,64 @@ export const register = async (
     email_confirm: true,
   });
 
-  if (error) {
-    errorResponse(res, 'User registration failed', error.message, 400);
-    return;
+  if (error || !data?.user) {
+    return errorResponse(res, 'User registration failed', error?.message, 400);
   }
 
-  successResponse(res, 'User registered successfully', { user: data.user }, 201);
-  return;
+  const user_id = data.user.id;
+
+  // 2. Insert into users table
+  const { error: userInsertError } = await supabase.from('users').insert([
+    {
+      id: user_id,
+      email,
+      role,
+      is_active: true,
+    },
+  ]);
+
+  if (userInsertError) {
+    return errorResponse(res, 'Failed to insert user', userInsertError.message, 500);
+  }
+
+  // 3. Insert into role-specific table
+  if (role === 'admin') {
+    const { error: adminInsertError } = await supabase.from('admins').insert([
+      {
+        id: user_id,
+        full_name,
+        super_admin: false,
+      },
+    ]);
+
+    if (adminInsertError) {
+      return errorResponse(res, 'Failed to insert into admins table', adminInsertError.message, 500);
+    }
+  }
+
+  if (role === 'instructor') {
+    const { error: instructorInsertError } = await supabase.from('instructors').insert([
+      {
+        user_id,
+        name,
+      },
+    ]);
+
+    if (instructorInsertError) {
+      return errorResponse(res, 'Failed to insert into instructors table', instructorInsertError.message, 500);
+    }
+  }
+
+  return successResponse(
+    res,
+    'User registered successfully',
+    {
+      id: user_id,
+      email,
+      role,
+    },
+    201
+  );
 };
 
 export const getUserById = async (
