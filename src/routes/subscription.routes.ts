@@ -10,9 +10,9 @@ import { requireAuth } from '../middlewares/auth.middleware';
   const router = Router();
 
   router.post('/', requireAuth ,createSubscription);
-  router.get('/', getAllSubscriptions);
-  router.get('/:id', getSubscriptionById);
-  router.put('/:id', updateSubscription);
-  router.delete('/:id', deleteSubscription);
+  router.get('/',requireAuth, getAllSubscriptions);
+  router.get('/:id',requireAuth, getSubscriptionById);
+  router.put('/:id', requireAuth, updateSubscription);
+  router.delete('/:id',requireAuth, deleteSubscription);
   
   export default router;
