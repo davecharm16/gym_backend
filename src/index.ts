@@ -6,9 +6,7 @@ import checkInRoutes from './routes/checkin.routes';
 import studentRoutes from './routes/student.routes';
 import subscriptionRoutes from './routes/subscription.routes';
 import trainingRoutes from './routes/training.routes';
-
-
-
+import attendanceRoutes from './routes/attendance.routes';
 import cors from 'cors';
 
 dotenv.config();
@@ -26,6 +24,8 @@ app.use('/api/checkIn', checkInRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/trainings', trainingRoutes);
+app.use('/api/attendance', attendanceRoutes);
+
 
 
 
