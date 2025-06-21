@@ -59,8 +59,13 @@ export const updateInstructor = async (req: Request, res: Response): Promise<voi
 
   if (updateError) return errorResponse(res, 'Failed to update instructor', updateError.message, 500);
 
-  return successResponse(res, 'Instructor updated successfully');
+  const { data, error: fetchError } = await supabase.from('instructors').select('*').eq('id', id).single();
+
+  if (fetchError) return errorResponse(res, 'Instructor updated but failed to retrieve updated record', fetchError.message, 500);
+
+  return successResponse(res, 'Instructor updated successfully', data);
 };
+
 
 export const deleteInstructor = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
