@@ -27,6 +27,9 @@ export const getMyProfile = async (req: Request, res: Response): Promise<void> =
             subscription_type_id,
             paid_until,
             created_at,
+            subscription_type:subscription_types!subscription_type_id (
+              name
+            ),
             enrollments:enrollments (
               training:trainings (
                 id,
@@ -47,7 +50,6 @@ export const getMyProfile = async (req: Request, res: Response): Promise<void> =
           trainings: data.enrollments?.map((e: any) => e.training),
           role: 'student',
         });
-      
       }
 
       case 'instructor': {
