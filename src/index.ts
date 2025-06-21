@@ -9,6 +9,7 @@ import trainingRoutes from './routes/training.routes';
 import attendanceRoutes from './routes/attendance.routes';
 import cors from 'cors';
 import profileRoutes from './routes/profile.routes';
+import instructorRoutes from './routes/instructor.routes';
 
 dotenv.config();
 
@@ -27,6 +28,8 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/trainings', trainingRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/instructor', instructorRoutes);
+
 
 
 
