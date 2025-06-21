@@ -11,6 +11,7 @@ import cors from 'cors';
 import profileRoutes from './routes/profile.routes';
 import instructorRoutes from './routes/instructor.routes';
 import enrollRoutes from './routes/enrollment.routes';
+import paymentRoutes from './routes/payment.routes';
 
 dotenv.config();
 
@@ -31,6 +32,8 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/instructor', instructorRoutes);
 app.use('/api/enroll', enrollRoutes);
+app.use('/api/payment', paymentRoutes);
+
 
 
 
