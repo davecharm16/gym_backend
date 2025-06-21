@@ -19,6 +19,7 @@ export const getMyProfile = async (req: Request, res: Response): Promise<void> =
           .select(`
             id,
             first_name,
+            middle_name,
             last_name,
             email,
             address,
