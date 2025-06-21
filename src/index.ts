@@ -10,6 +10,7 @@ import attendanceRoutes from './routes/attendance.routes';
 import cors from 'cors';
 import profileRoutes from './routes/profile.routes';
 import instructorRoutes from './routes/instructor.routes';
+import enrollRoutes from './routes/enrollment.routes';
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (_req, res) => {
-  res.status(200).send('🚀 Gym backend is running!');
+  res.status(200).send('🚀 Gym backend is running! ---DAVE CHARM BULAQUENA');
 });
 
 app.use('/api/auth', authRoutes);
@@ -29,9 +30,7 @@ app.use('/api/trainings', trainingRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/instructor', instructorRoutes);
-
-
-
+app.use('/api/enroll', enrollRoutes);
 
 
 
