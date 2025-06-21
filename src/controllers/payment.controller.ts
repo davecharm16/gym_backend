@@ -7,9 +7,9 @@ import Joi from 'joi';
 const createPaymentSchema = Joi.object({
   student_id: Joi.string().uuid().required(),
   amount: Joi.number().positive().required(),
-  payment_type: Joi.string().valid('subscription', 'training_fee').required(),
-  training_id: Joi.string().uuid().optional().allow(null),
+  payment_type: Joi.string().required(), // allows any string
   payment_method: Joi.string().valid('cash', 'online').default('cash'),
+  amount_to_pay: Joi.number().positive().required(),
 });
 
 const updatePaymentSchema = Joi.object({
@@ -21,15 +21,36 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
   const { error, value } = createPaymentSchema.validate(req.body);
   if (error) return errorResponse(res, 'Validation failed', error.details[0].message, 400);
 
-  const { data, error: insertError } = await supabase
-    .from('payments')
-    .insert([value])
-    .select('*')
-    .single();
+  const { student_id, amount, payment_type, payment_method, amount_to_pay } = value;
 
-  if (insertError) return errorResponse(res, 'Failed to create payment', insertError.message, 500);
+  if (amount < amount_to_pay) {
+    return errorResponse(res, 'Insufficient payment', 'Amount is less than the required fee.', 400);
+  }
 
-  return successResponse(res, 'Payment recorded successfully', data, 201);
+  const change = amount - amount_to_pay;
+
+  try {
+    const { data, error: insertError } = await supabase
+      .from('payments')
+      .insert([
+        {
+          student_id,
+          amount,
+          payment_type,
+          payment_method,
+          amount_to_pay,
+          change,
+        },
+      ])
+      .select('*')
+      .single();
+
+    if (insertError) return errorResponse(res, 'Failed to create payment', insertError.message, 500);
+
+    return successResponse(res, 'Payment recorded successfully', data, 201);
+  } catch (e) {
+    return errorResponse(res, 'Server error', (e as Error).message, 500);
+  }
 };
 
 export const getPaymentsByStudent = async (req: Request, res: Response): Promise<void> => {
