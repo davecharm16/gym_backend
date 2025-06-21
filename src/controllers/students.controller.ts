@@ -4,12 +4,13 @@ import { successResponse, errorResponse } from '../utils/response';
 import Joi from 'joi';
 
 
+
 export const getStudents = async (req: Request, res: Response): Promise<void> => {
   const search = req.query.search as string | undefined;
 
   let query = supabase
     .from('student_with_subscription_details')
-    .select('*')
+    .select('*, enrollments(*, trainings(*))')
     .order('created_at', { ascending: false });
 
   if (search) {
@@ -24,6 +25,7 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
 
   return successResponse(res, 'Students retrieved successfully', data);
 };
+
 
 export const getStudentById = async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   const { id } = req.params;
