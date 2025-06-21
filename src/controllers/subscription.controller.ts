@@ -1,9 +1,13 @@
+// src/controllers/subscriptionController.ts
 import { Request, Response } from 'express';
 import supabase from '../supabase/client';
 import { successResponse, errorResponse } from '../utils/response';
-import { createSubscriptionSchema } from '../validations/subscription.schema';
 import Joi from 'joi';
 
+const createSubscriptionSchema = Joi.object({
+  name: Joi.string().min(3).required(),
+  amount: Joi.number().positive().required(),
+});
 
 export const createSubscription = async (req: Request, res: Response): Promise<void> => {
   const { error: validationError, value } = createSubscriptionSchema.validate(req.body);
@@ -16,7 +20,7 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
     return errorResponse(res, 'Unauthorized', 'No user ID in token', 401);
   }
 
-  // ✅ Step 1: Ensure the user is a valid admin in the admins table
+  // Check if user is an admin
   const { data: adminRecord, error: adminError } = await supabase
     .from('admins')
     .select('id')
@@ -29,7 +33,22 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
 
   const { name, amount } = value;
 
-  // ✅ Step 2: Insert into subscription_types
+  // Check for duplicate name
+  const { data: existing, error: checkError } = await supabase
+    .from('subscription_types')
+    .select('id')
+    .eq('name', name)
+    .maybeSingle();
+
+  if (checkError) {
+    return errorResponse(res, 'Error checking existing subscription', checkError.message, 500);
+  }
+
+  if (existing) {
+    return errorResponse(res, 'Subscription type already exists', `The name "${name}" is already in use.`, 400);
+  }
+
+  // Create subscription type
   const { data: typeData, error: typeError } = await supabase
     .from('subscription_types')
     .insert([{ name, created_by: userId }])
@@ -40,7 +59,6 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
     return errorResponse(res, 'Failed to create subscription type', typeError?.message, 500);
   }
 
-  // ✅ Step 3: Insert into subscription_fees
   const { error: feeError } = await supabase.from('subscription_fees').insert([
     {
       subscription_type_id: typeData.id,
@@ -59,9 +77,6 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
   }, 201);
 };
 
-/**
- * Get all subscriptions with their fees
- */
 export const getAllSubscriptions = async (_req: Request, res: Response): Promise<void> => {
   const { data, error } = await supabase
     .from('subscription_types')
@@ -79,9 +94,6 @@ export const getAllSubscriptions = async (_req: Request, res: Response): Promise
   return successResponse(res, 'Subscriptions retrieved successfully', data);
 };
 
-/**
- * Get subscription by ID
- */
 export const getSubscriptionById = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
 
@@ -105,12 +117,9 @@ export const getSubscriptionById = async (req: Request, res: Response): Promise<
   return successResponse(res, 'Subscription retrieved successfully', data);
 };
 
-/**
- * Update subscription type name and/or fee
- */
 export const updateSubscription = async (req: Request, res: Response): Promise<void> => {
   const schema = Joi.object({
-    name: Joi.string().valid('monthly', 'per_session').optional(),
+    name: Joi.string().min(3).optional(),
     amount: Joi.number().positive().optional(),
   });
 
@@ -121,7 +130,6 @@ export const updateSubscription = async (req: Request, res: Response): Promise<v
 
   const { id } = req.params;
 
-  // Update name
   if (value.name) {
     const { error } = await supabase
       .from('subscription_types')
@@ -133,7 +141,6 @@ export const updateSubscription = async (req: Request, res: Response): Promise<v
     }
   }
 
-  // Update fee
   if (value.amount) {
     const { error } = await supabase
       .from('subscription_fees')
@@ -148,21 +155,25 @@ export const updateSubscription = async (req: Request, res: Response): Promise<v
   return successResponse(res, 'Subscription updated successfully', null);
 };
 
-/**
- * Delete subscription and its associated fee
- */
 export const deleteSubscription = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
 
-  const { error: feeError } = await supabase
-    .from('subscription_fees')
-    .delete()
+  // Check if used by any student
+  const { count, error: countError } = await supabase
+    .from('students')
+    .select('id', { count: 'exact', head: true })
     .eq('subscription_type_id', id);
 
-  const { error: typeError } = await supabase
-    .from('subscription_types')
-    .delete()
-    .eq('id', id);
+  if (countError) {
+    return errorResponse(res, 'Failed to validate subscription usage', countError.message, 500);
+  }
+
+  if (count && count > 0) {
+    return errorResponse(res, 'Cannot delete subscription type', 'It is currently used by one or more students', 400);
+  }
+
+  await supabase.from('subscription_fees').delete().eq('subscription_type_id', id);
+  const { error: typeError } = await supabase.from('subscription_types').delete().eq('id', id);
 
   if (typeError) {
     return errorResponse(res, 'Failed to delete subscription type', typeError.message, 500);
