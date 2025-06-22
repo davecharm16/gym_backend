@@ -9,12 +9,12 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
   try {
     let subscriptionTypeId: string | undefined = undefined;
 
-    // Step 1: Get ID from subscription type name if filter is provided
-    if (subscription_type_name) {
+    // Step 1: If filtering by subscription name, get ID
+    if (subscription_type_name && subscription_type_name !== 'all') {
       const { data: subTypeData, error: subTypeError } = await supabase
         .from('subscription_types')
         .select('id')
-        .ilike('name', `${subscription_type_name}`) // case-insensitive match
+        .ilike('name', `${subscription_type_name}`);
 
       if (subTypeError) {
         return errorResponse(res, 'Failed to find subscription type', subTypeError.message, 500);
@@ -27,7 +27,7 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
       subscriptionTypeId = subTypeData[0].id;
     }
 
-    // Step 2: Query students with optional filtering
+    // Step 2: Query students with joins
     let query = supabase
       .from('students')
       .select(`
@@ -43,6 +43,13 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
         created_at,
         subscription_type:subscription_types!subscription_type_id (
           name
+        ),
+        enrollments:enrollments (
+          training:trainings (
+            id,
+            title,
+            description
+          )
         )
       `);
 
@@ -63,22 +70,47 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
 };
 
 
+
 export const getStudentById = async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   const { id } = req.params;
 
-  const { data, error } = await supabase
-    .from('student_with_subscription_details')
-    .select('*')
-    .eq('id', id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select(`
+        id,
+        first_name,
+        middle_name,
+        last_name,
+        email,
+        address,
+        birthdate,
+        subscription_type_id,
+        paid_until,
+        created_at,
+        subscription_type:subscription_types!subscription_type_id (
+          name
+        ),
+        enrollments:enrollments (
+          training:trainings (
+            id,
+            title,
+            description
+          )
+        )
+      `)
+      .eq('id', id)
+      .single();
 
-  if (error || !data) {
-    return errorResponse(res, 'Student not found', error?.message || null, 404);
+    if (error || !data) {
+      return errorResponse(res, 'Student not found', error?.message || null, 404);
+    }
+
+    return successResponse(res, 'Student retrieved successfully', data);
+  } catch (err) {
+    return errorResponse(res, 'Server error', (err as Error).message, 500);
   }
-
-  return successResponse(res, 'Student retrieved successfully', data);
 };
-
 
 
 export const updateStudent = async (req: Request<{ id: string }>, res: Response): Promise<void> => {
