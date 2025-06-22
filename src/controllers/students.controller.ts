@@ -3,27 +3,63 @@ import supabase from '../supabase/client';
 import { successResponse, errorResponse } from '../utils/response';
 import Joi from 'joi';
 
-
-
 export const getStudents = async (req: Request, res: Response): Promise<void> => {
-  const search = req.query.search as string | undefined;
+  const { subscription_type_name } = req.query;
 
-  let query = supabase
-    .from('student_with_subscription_details')
-    .select('*, enrollments(*, trainings(*))')
-    .order('created_at', { ascending: false });
+  try {
+    let subscriptionTypeId: string | undefined = undefined;
 
-  if (search) {
-    query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%`);
+    // Step 1: Get ID from subscription type name if filter is provided
+    if (subscription_type_name) {
+      const { data: subTypeData, error: subTypeError } = await supabase
+        .from('subscription_types')
+        .select('id')
+        .ilike('name', `${subscription_type_name}`) // case-insensitive match
+
+      if (subTypeError) {
+        return errorResponse(res, 'Failed to find subscription type', subTypeError.message, 500);
+      }
+
+      if (!subTypeData || subTypeData.length === 0) {
+        return successResponse(res, 'No students found for given subscription type name', []);
+      }
+
+      subscriptionTypeId = subTypeData[0].id;
+    }
+
+    // Step 2: Query students with optional filtering
+    let query = supabase
+      .from('students')
+      .select(`
+        id,
+        first_name,
+        middle_name,
+        last_name,
+        email,
+        address,
+        birthdate,
+        subscription_type_id,
+        paid_until,
+        created_at,
+        subscription_type:subscription_types!subscription_type_id (
+          name
+        )
+      `);
+
+    if (subscriptionTypeId) {
+      query = query.eq('subscription_type_id', subscriptionTypeId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return errorResponse(res, 'Failed to fetch students', error.message, 500);
+    }
+
+    return successResponse(res, 'Students fetched successfully', data);
+  } catch (err) {
+    return errorResponse(res, 'Server error', err, 500);
   }
-
-  const { data, error } = await query;
-
-  if (error) {
-    return errorResponse(res, 'Failed to retrieve students', error.message, 500);
-  }
-
-  return successResponse(res, 'Students retrieved successfully', data);
 };
 
 
