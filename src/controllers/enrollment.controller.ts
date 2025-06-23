@@ -14,41 +14,73 @@ const unenrollSchema = Joi.object({
 });
 
 const isAdmin = (role: string | undefined) => role?.toLowerCase() === 'admin';
-
 export const enrollTrainings = async (req: Request, res: Response): Promise<void> => {
   if (!isAdmin(req.user?.user_metadata?.role)) {
     return errorResponse(res, 'Forbidden', 'Only admins can enroll students', 403);
   }
 
   const { error, value } = enrollSchema.validate(req.body);
-  if (error) return errorResponse(res, 'Validation failed', error.details[0].message, 400);
+  if (error) {
+    return errorResponse(res, 'Validation failed', error.details[0].message, 400);
+  }
 
   const { student, trainings } = value;
 
-  // Fetch existing training_ids
-  const { data: existing, error: existingError } = await supabase
+  // Fetch current enrollments
+  const { data: existingEnrollments, error: fetchError } = await supabase
     .from('enrollments')
     .select('training_id')
     .eq('student_id', student);
 
-  if (existingError) {
-    return errorResponse(res, 'Failed to check existing enrollments', existingError.message, 500);
+  if (fetchError) {
+    return errorResponse(res, 'Failed to fetch existing enrollments', fetchError.message, 500);
   }
 
-  const alreadyEnrolledIds = new Set(existing.map(e => e.training_id));
-  const newTrainingIds = trainings.filter((id: any) => !alreadyEnrolledIds.has(id));
+  const existingIds = new Set(existingEnrollments.map(e => e.training_id));
+  const incomingIds = new Set(trainings);
 
-  if (newTrainingIds.length === 0) {
-    return successResponse(res, 'No new enrollments to process', []);
+  // Determine which to add
+  const toAdd = trainings.filter((id: any) => !existingIds.has(id));
+  const toRemove = [...existingIds].filter(id => !incomingIds.has(id));
+
+  // Perform inserts
+  let insertedData = [];
+  if (toAdd.length > 0) {
+    const records = toAdd.map((training_id: any) => ({
+      student_id: student,
+      training_id,
+    }));
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('enrollments')
+      .insert(records)
+      .select('*');
+
+    if (insertError) {
+      return errorResponse(res, 'Failed to enroll trainings', insertError.message, 500);
+    }
+
+    insertedData = inserted;
   }
 
-  const records = newTrainingIds.map((training_id: string) => ({ student_id: student, training_id }));
+  // Perform deletes
+  if (toRemove.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('enrollments')
+      .delete()
+      .eq('student_id', student)
+      .in('training_id', toRemove);
 
-  const { data, error: insertError } = await supabase.from('enrollments').insert(records).select('*');
+    if (deleteError) {
+      return errorResponse(res, 'Failed to unenroll trainings', deleteError.message, 500);
+    }
+  }
 
-  if (insertError) return errorResponse(res, 'Failed to enroll trainings', insertError.message, 500);
-
-  return successResponse(res, 'Enrollments created successfully', data, 201);
+  return successResponse(res, 'Enrollments updated successfully', {
+    added: toAdd,
+    removed: toRemove,
+    inserted: insertedData,
+  });
 };
 
 export const getEnrollmentsByStudent = async (req: Request, res: Response): Promise<void> => {
