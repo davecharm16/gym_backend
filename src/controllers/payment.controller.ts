@@ -94,6 +94,7 @@ export const deletePayment = async (req: Request, res: Response): Promise<void> 
 
   return successResponse(res, 'Payment deleted successfully');
 };
+
 export const getAllPaymentsWithStudent = async (req: Request, res: Response): Promise<void> => {
   const { start_date, end_date, payment_type, payment_method } = req.query;
 
@@ -123,13 +124,19 @@ export const getAllPaymentsWithStudent = async (req: Request, res: Response): Pr
       `)
       .order('paid_at', { ascending: false });
 
-    // Apply filters
+    // Apply date range filter (handles same-day properly)
     if (start_date && end_date) {
-      query = query
-        .gte('paid_at', start_date as string)
-        .lte('paid_at', end_date as string);
+      const isSameDay = start_date === end_date;
+
+      const startDateISO = new Date(`${start_date}T00:00:00.000Z`).toISOString();
+      const endDateISO = isSameDay
+        ? new Date(`${end_date}T23:59:59.999Z`).toISOString()
+        : new Date(`${end_date}T23:59:59.999Z`).toISOString();
+
+      query = query.gte('paid_at', startDateISO).lte('paid_at', endDateISO);
     }
 
+    // Apply optional filters
     if (payment_type && payment_type !== 'all') {
       query = query.eq('payment_type', payment_type as string);
     }
@@ -142,13 +149,16 @@ export const getAllPaymentsWithStudent = async (req: Request, res: Response): Pr
 
     if (error) return errorResponse(res, 'Failed to fetch payments', error.message, 500);
 
-    // Calculate totals from filtered result
-    const total_amount = data.reduce((sum, item) => sum + Number(item.amount), 0);
-    const total_amount_to_pay = data.reduce((sum, item) => sum + Number(item.amount_to_pay), 0);
-    const total_change = data.reduce((sum, item) => sum + Number(item.change || 0), 0);
+    // Defensive check
+    const safeData = data || [];
+
+    // Compute totals
+    const total_amount = safeData.reduce((sum, item) => sum + Number(item.amount), 0);
+    const total_amount_to_pay = safeData.reduce((sum, item) => sum + Number(item.amount_to_pay), 0);
+    const total_change = safeData.reduce((sum, item) => sum + Number(item.change || 0), 0);
 
     return successResponse(res, 'Payments with student info fetched successfully', {
-      records: data,
+      records: safeData,
       summary: {
         total_amount,
         total_amount_to_pay,
@@ -159,6 +169,7 @@ export const getAllPaymentsWithStudent = async (req: Request, res: Response): Pr
     return errorResponse(res, 'Server error', (e as Error).message, 500);
   }
 };
+
 
 export const getPaymentAverages = async (req: Request, res: Response): Promise<void> => {
   try {
