@@ -175,7 +175,7 @@ export const getPaymentAverages = async (req: Request, res: Response): Promise<v
   try {
     const { data, error } = await supabase
       .from('payments')
-      .select('amount, paid_at');
+      .select('amount_to_pay, paid_at');
 
     if (error) {
       return errorResponse(res, 'Failed to fetch payments', error.message, 500);
@@ -189,7 +189,7 @@ export const getPaymentAverages = async (req: Request, res: Response): Promise<v
     }
 
     // Total amount and date range
-    const totalAmount = data.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const totalAmount = data.reduce((sum, payment) => sum + Number(payment.amount_to_pay), 0);
 
     const dates = data.map(p => new Date(p.paid_at));
     const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
