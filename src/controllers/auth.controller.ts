@@ -134,6 +134,24 @@ export const login = async (
 
   const { access_token, refresh_token, user } = data.session;
 
+  // Soft delete check
+  const { data: userRecord, error: userRecordError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', user.id)
+    .eq('is_deleted', false)
+    .maybeSingle();
+
+  if (userRecordError) {
+    errorResponse(res, 'Error verifying account status', userRecordError.message, 500);
+    return;
+  }
+
+  if (!userRecord) {
+    errorResponse(res, 'Account has been deleted or disabled', 'Account is no longer active', 403);
+    return;
+  }
+
   successResponse(res, 'Login successful', {
     token: access_token,
     refresh_token,
@@ -145,6 +163,7 @@ export const login = async (
   });
   return;
 };
+
 
 export const registerStudent = async (req: Request, res: Response): Promise<void> => {
   const { error: validationError, value } = registerStudentSchema.validate(req.body);
