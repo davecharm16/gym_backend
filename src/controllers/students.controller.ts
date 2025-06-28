@@ -51,7 +51,9 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
             description
           )
         )
-      `);
+        users!inner(id)
+      `)
+      .eq('users.is_deleted', false);
 
     if (subscriptionTypeId) {
       query = query.eq('subscription_type_id', subscriptionTypeId);
@@ -98,9 +100,11 @@ export const getStudentById = async (req: Request<{ id: string }>, res: Response
             description
           )
         )
+        users!inner(id)
       `)
       .eq('id', id)
-      .single();
+      .eq('users.is_deleted', false)
+      .maybeSingle();
 
     if (error || !data) {
       return errorResponse(res, 'Student not found', error?.message || null, 404);
@@ -158,3 +162,43 @@ export const deleteStudent = async (req: Request<{ id: string }>, res: Response)
 
   return successResponse(res, 'Student deleted successfully', null);
 };
+
+export const softDeleteStudent = async (
+  req: Request<{ id: string }>,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+
+  // 1. Get the student's user_id
+  const { data: student, error: fetchError } = await supabase
+    .from("students")
+    .select("user_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (fetchError) {
+    errorResponse(res, "Failed to find student", fetchError.message, 500);
+    return;
+  }
+
+  if (!student) {
+    errorResponse(res, "Student not found", "No matching student", 404);
+    return;
+  }
+
+  const userId = student.user_id;
+
+  // 2. Soft delete the user
+  const { error: softDeleteError } = await supabase
+    .from("users")
+    .update({ is_deleted: true })
+    .eq("id", userId);
+
+  if (softDeleteError) {
+    errorResponse(res, "Failed to soft delete user", softDeleteError.message, 500);
+    return;
+  }
+
+  successResponse(res, "Student soft deleted successfully");
+};
+
