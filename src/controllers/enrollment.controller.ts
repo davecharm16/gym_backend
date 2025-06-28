@@ -5,7 +5,7 @@ import Joi from 'joi';
 
 const enrollSchema = Joi.object({
   student: Joi.string().uuid().required(),
-  trainings: Joi.array().items(Joi.string().uuid()).min(1).required(),
+  trainings: Joi.array().items(Joi.string().uuid()).required(),
 });
 
 const unenrollSchema = Joi.object({
