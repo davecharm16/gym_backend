@@ -4,6 +4,7 @@ import supabase from '../supabase/client';
 import { successResponse, errorResponse } from '../utils/response';
 import Joi from 'joi';
 import { differenceInWeeks, differenceInMonths } from 'date-fns';
+import { extendByMonths } from '../utils/subscriptions';
 
 const createPaymentSchema = Joi.object({
   student_id: Joi.string().uuid().required(),
@@ -20,8 +21,9 @@ const updatePaymentSchema = Joi.object({
 
 export const createPayment = async (req: Request, res: Response): Promise<void> => {
   const { error, value } = createPaymentSchema.validate(req.body);
-  if (error) return errorResponse(res, 'Validation failed', error.details[0].message, 400);
-
+  if (error) {
+    return errorResponse(res, 'Validation failed', error.details[0].message, 400);
+  }
   const { student_id, amount, payment_type, payment_method, amount_to_pay } = value;
 
   if (amount < amount_to_pay) {
@@ -31,28 +33,51 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
   const change = amount - amount_to_pay;
 
   try {
-    const { data, error: insertError } = await supabase
+    // 1️⃣ Insert payment record
+    const { data: payment, error: insertError } = await supabase
       .from('payments')
-      .insert([
-        {
-          student_id,
-          amount,
-          payment_type,
-          payment_method,
-          amount_to_pay,
-          change,
-        },
-      ])
+      .insert([{ student_id, amount, payment_type, payment_method, amount_to_pay, change }])
       .select('*')
       .single();
+    if (insertError) {
+      return errorResponse(res, 'Failed to create payment', insertError.message, 500);
+    }
 
-    if (insertError) return errorResponse(res, 'Failed to create payment', insertError.message, 500);
+    // 2️⃣ If monthly: extend paid_until
+    if (payment_type === 'monthly') {
+      // Fetch existing paid_until
+      const { data: stud, error: studErr } = await supabase
+        .from('students')
+        .select('paid_until')
+        .eq('id', student_id)
+        .single();
 
-    return successResponse(res, 'Payment recorded successfully', data, 201);
+      const today = new Date();
+      let baseDate = today;
+      if (!studErr && stud?.paid_until) {
+        const existing = new Date(stud.paid_until);
+        if (existing > today) baseDate = existing;
+      }
+
+      // How many whole months did they pay for?
+      const monthsToAdd = Math.floor(amount / amount_to_pay);
+      const newPaidUntil = extendByMonths(baseDate, monthsToAdd);
+
+      // Persist it
+      const { error: updErr } = await supabase
+        .from('students')
+        .update({ paid_until: newPaidUntil })
+        .eq('id', student_id);
+
+      if (updErr) console.error('Failed to update paid_until:', updErr);
+    }
+
+    return successResponse(res, 'Payment recorded successfully', payment, 201);
   } catch (e) {
     return errorResponse(res, 'Server error', (e as Error).message, 500);
   }
 };
+
 
 export const getPaymentsByStudent = async (req: Request, res: Response): Promise<void> => {
   const { studentId } = req.params;

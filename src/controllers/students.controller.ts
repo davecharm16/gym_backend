@@ -2,32 +2,31 @@ import { Request, Response } from 'express';
 import supabase from '../supabase/client';
 import { successResponse, errorResponse } from '../utils/response';
 import Joi from 'joi';
+import { getExpiryNote } from '../utils/subscriptions';
+
 
 export const getStudents = async (req: Request, res: Response): Promise<void> => {
   const { subscription_type_name } = req.query;
 
   try {
-    let subscriptionTypeId: string | undefined = undefined;
+    let subscriptionTypeId: string | undefined;
 
-    // Step 1: If filtering by subscription name, get ID
     if (subscription_type_name && subscription_type_name !== 'all') {
-      const { data: subTypeData, error: subTypeError } = await supabase
+      const { data: st, error: se } = await supabase
         .from('subscription_types')
         .select('id')
-        .ilike('name', `${subscription_type_name}`);
+        .ilike('name', `${subscription_type_name}`)
+        .single();
 
-      if (subTypeError) {
-        return errorResponse(res, 'Failed to find subscription type', subTypeError.message, 500);
+      if (se) {
+        return errorResponse(res, 'Failed to find subscription type', se.message, 500);
       }
-
-      if (!subTypeData || subTypeData.length === 0) {
-        return successResponse(res, 'No students found for given subscription type name', []);
+      if (!st) {
+        return successResponse(res, 'No students for that subscription', []);
       }
-
-      subscriptionTypeId = subTypeData[0].id;
+      subscriptionTypeId = st.id;
     }
 
-    // Step 2: Query students with joins
     let query = supabase
       .from('students')
       .select(`
@@ -50,7 +49,7 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
             title,
             description
           )
-        )
+        ),
         users!inner(id)
       `)
       .eq('users.is_deleted', false);
@@ -60,20 +59,31 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
     }
 
     const { data, error } = await query;
-
     if (error) {
       return errorResponse(res, 'Failed to fetch students', error.message, 500);
     }
 
-    return successResponse(res, 'Students fetched successfully', data);
+    const withNotes = (data || []).map(student => {
+      // subscription_type comes back as an array: [{ name }]
+      const subName = student.subscription_type?.[0]?.name as string | undefined;
+      const isMonthly = subName?.toLowerCase() === 'monthly';
+
+      return {
+        ...student,
+        note: isMonthly ? getExpiryNote(student.paid_until) : null,
+      };
+    });
+
+    return successResponse(res, 'Students fetched successfully', withNotes);
   } catch (err) {
-    return errorResponse(res, 'Server error', err, 500);
+    return errorResponse(res, 'Server error', (err as Error).message, 500);
   }
 };
 
-
-
-export const getStudentById = async (req: Request<{ id: string }>, res: Response): Promise<void> => {
+export const getStudentById = async (
+  req: Request<{ id: string }>,
+  res: Response
+): Promise<void> => {
   const { id } = req.params;
 
   try {
@@ -99,7 +109,7 @@ export const getStudentById = async (req: Request<{ id: string }>, res: Response
             title,
             description
           )
-        )
+        ),
         users!inner(id)
       `)
       .eq('id', id)
@@ -110,7 +120,15 @@ export const getStudentById = async (req: Request<{ id: string }>, res: Response
       return errorResponse(res, 'Student not found', error?.message || null, 404);
     }
 
-    return successResponse(res, 'Student retrieved successfully', data);
+    const subName = data.subscription_type?.[0]?.name as string | undefined;
+    const isMonthly = subName?.toLowerCase() === 'monthly';
+
+    const studentWithNote = {
+      ...data,
+      note: isMonthly ? getExpiryNote(data.paid_until) : null,
+    };
+
+    return successResponse(res, 'Student retrieved successfully', studentWithNote);
   } catch (err) {
     return errorResponse(res, 'Server error', (err as Error).message, 500);
   }
