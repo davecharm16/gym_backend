@@ -16,10 +16,12 @@ const calculateAge = (birthdate: string): number => {
 
 export const getAttendanceLogs = async (req: Request, res: Response): Promise<void> => {
   const studentId = req.query.student_id as string | undefined;
+  const date = req.query.date as string | undefined;
 
   let query = supabase
     .from('student_checkins')
-    .select(`
+    .select(
+      `
       id,
       student_id,
       checkin_time,
@@ -32,11 +34,26 @@ export const getAttendanceLogs = async (req: Request, res: Response): Promise<vo
         birthdate,
         subscription_type_id
       )
-    `)
+    `
+    )
     .order('checkin_time', { ascending: false });
 
   if (studentId) {
     query = query.eq('student_id', studentId);
+  }
+
+  // If a date is provided, filter between start and end of that day
+  if (date) {
+    const parsedDate = new Date(date);
+    if (!isNaN(parsedDate.getTime())) {
+      const startOfDay = new Date(parsedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(parsedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      query = query.gte('checkin_time', startOfDay.toISOString()).lte('checkin_time', endOfDay.toISOString());
+    }
   }
 
   const { data, error } = await query;
