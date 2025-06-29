@@ -50,7 +50,7 @@ export const getStudents = async (req: Request, res: Response): Promise<void> =>
             description
           )
         ),
-        users!inner(id)
+        users!inner(id,email)
       `)
       .eq('users.is_deleted', false);
 
@@ -110,7 +110,7 @@ export const getStudentById = async (
             description
           )
         ),
-        users!inner(id)
+        users!inner(id,email)
       `)
       .eq('id', id)
       .eq('users.is_deleted', false)
