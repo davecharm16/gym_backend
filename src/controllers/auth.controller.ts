@@ -259,3 +259,28 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
   );
   return;
 };
+
+export const requestPasswordReset = async (req: Request, res: Response): Promise<void> => {
+  const { email } = req.body;
+
+  if (!email) {
+    return errorResponse(res, "Email is required", "Missing email", 400);
+  }
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://gym-frontend-lac.vercel.app/reset-password"
+      // Replace with your actual frontend URL
+    });
+
+    if (error) {
+      console.error("Supabase error sending reset email:", error);
+      return errorResponse(res, "Failed to send reset email", error.message, 500);
+    }
+
+    return successResponse(res, "Password reset email sent successfully");
+  } catch (err) {
+    console.error("Unexpected error:", err);
+    return errorResponse(res, "Unexpected error", String(err), 500);
+  }
+};
