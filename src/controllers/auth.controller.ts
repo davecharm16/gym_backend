@@ -3,6 +3,7 @@ import supabase from '../supabase/client';
 import { registerStudentSchema } from '../validations/registerStudent.schema';
 import { successResponse, errorResponse } from '../utils/response';
 import { registerSchema } from '../validations/register.schema';
+import Joi from 'joi';
 
 
 interface RegisterRequestBody {
@@ -279,6 +280,39 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
     }
 
     return successResponse(res, "Password reset email sent successfully");
+  } catch (err) {
+    console.error("Unexpected error:", err);
+    return errorResponse(res, "Unexpected error", String(err), 500);
+  }
+};
+
+
+// Force reset password via admin API
+export const forceResetPassword = async (req: Request, res: Response): Promise<void> => {
+  // Joi schema
+  const schema = Joi.object({
+    user_id: Joi.string().uuid().required(),
+    newPassword: Joi.string().min(6).required(),
+  });
+
+  const { error: validationError, value } = schema.validate(req.body);
+  if (validationError) {
+    return errorResponse(res, "Validation error", validationError.details[0].message, 400);
+  }
+
+  const { user_id, newPassword } = value;
+
+  try {
+    const { data, error } = await supabase.auth.admin.updateUserById(user_id, {
+      password: newPassword,
+    });
+
+    if (error) {
+      console.error("Error resetting password:", error);
+      return errorResponse(res, "Failed to reset password", error.message, 500);
+    }
+
+    return successResponse(res, "Password reset successfully", data);
   } catch (err) {
     console.error("Unexpected error:", err);
     return errorResponse(res, "Unexpected error", String(err), 500);
